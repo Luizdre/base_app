@@ -1,0 +1,15 @@
+name: 'Cache CocoaPods dependencies'
+description: 'Cache CocoaPods dependencies to reduce build time'
+runs:
+  using: 'composite'
+  steps:
+    # Taken from https://github.com/actions/cache/blob/main/examples.md#swift-objective-c---cocoapods
+    - name: Cache CocoaPods dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ios/Pods
+          ios/Podfile.lock
+        key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-pods-

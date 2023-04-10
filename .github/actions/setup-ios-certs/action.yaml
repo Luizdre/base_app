@@ -1,0 +1,44 @@
+name: 'Setup iOS certificates and provisioning profile for signing ipa'
+description: 'Setup iOS certificates and provisioning profile for signing ipa'
+
+inputs:
+  buildCertificateBase64:
+    description: p12 build certificate in base 64
+    required: true
+  p12Password:
+    description: p12 build certificate password
+    required: true
+  buildProvisionProfileBase64:
+    description: Provisioning profile in base 64
+    required: true
+  keychainPassword:
+    description: Random password for the created keychain
+    required: true
+runs:
+  using: 'composite'
+  steps:
+        # Taken from https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development#add-a-step-to-your-workflow
+      - name: Install the Apple certificate and provisioning profile
+        shell: bash
+        run: |
+          # create variables
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          # import certificate and provisioning profile from secrets
+          echo -n "${{ inputs.buildCertificateBase64 }}" | base64 --decode --output $CERTIFICATE_PATH
+          echo -n "${{ inputs.buildProvisionProfileBase64 }}" | base64 --decode --output $PP_PATH
+
+          # create temporary keychain
+          security create-keychain -p "${{ inputs.keychainPassword }}" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "${{ inputs.keychainPassword }}" $KEYCHAIN_PATH
+
+          # import certificate to keychain
+          security import $CERTIFICATE_PATH -P "${{ inputs.p12Password }}" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # apply provisioning profile
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles

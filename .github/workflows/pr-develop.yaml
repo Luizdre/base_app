@@ -1,0 +1,20 @@
+name: Pull request to develop branch
+
+on:
+  pull_request:
+    types: [ opened, synchronize, reopened ] # Note: default value
+    branches: [ develop ]
+
+concurrency:
+  group: pr-mobile-develop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  basic-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-flutter-app
+
+      - name: Check code formatting and analyze code
+        run: make basic-tests

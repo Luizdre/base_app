@@ -1,0 +1,72 @@
+name: Platforms environment update
+
+on:
+  workflow_call:
+    inputs:
+      github_env:
+        required: true
+        type: string
+      flutter_flavor:
+        required: true
+        type: string
+      android_release_file_path:
+        required: true
+        type: string
+
+jobs:
+  build-push-android:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.github_env }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-flutter-app
+        with:
+          cacheAndroidBuild: 'true'
+      - uses: ./.github/actions/cache-gradle-dep
+
+      - name: Build android artifact
+        run: flutter build appbundle --release --no-pub -t lib/main.dart
+
+      - name: Unsign appbundle
+        if: ${{ inputs.github_env == 'prod' }}
+        run: zip -d "${{ inputs.android_release_file_path }}/app-prod-release.aab" META-INF/\*
+
+      - name: Sign android release artifact
+        uses: r0adkll/sign-android-release@v1
+        id: sign_app
+        with:
+          releaseDirectory: ${{ inputs.android_release_file_path }}
+          signingKeyBase64: ${{ secrets.APP_SIGNING_KEY }}
+          alias: ${{ secrets.APP_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.APP_KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.APP_KEY_PASSWORD }}
+
+      - name: Push android app to Firebase App Distribution
+        uses: ./.github/actions/firebase-push-app-dist
+        with:
+          firebaseSaKey: ${{ secrets.FIREBASE_SA_KEY }}
+          firebaseAppId: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
+          signedReleaseFile: ${{ steps.sign_app.outputs.signedReleaseFile }}
+
+      - name: Push android prod release draft
+        if: ${{ inputs.github_env == 'prod' }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          releaseFiles: ${{ steps.sign_app.outputs.signedReleaseFile }}
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLEP_PLAY_SA_KEY }}
+          packageName: br.com.projectName
+          track: production
+          status: draft
+
+      - name: "Notify via email"
+        uses: dawidd6/action-send-mail@v2
+        if: ${{ failure() }}
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: ${{ github.job }} job of ${{ github.repository }} has ${{ job.status }}
+          body: ${{ github.job }} job in worflow ${{ github.workflow }} of ${{ github.repository }} has ${{ job.status }}
+          to: andre2051@hotmail.com
+          from: GitHub

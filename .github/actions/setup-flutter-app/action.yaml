@@ -1,0 +1,98 @@
+name: 'Setup working flutter app environment'
+description: 'Run all steps needed to setup a working flutter environment for building and testing the app'
+inputs:
+  cacheAndroidBuild:
+    description: 'Wether to cache android build folder'
+    required: false
+    default: 'false'
+  cacheIosBuild:
+    description: 'Wether to cache ios build folder'
+    required: false
+    default: 'false'
+  cacheWebBuild:
+    description: 'Wether to cache web build folder'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    # Taken from: https://github.com/marketplace/actions/flutter-action
+    - name: Setup flutter environment
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.7.8'
+        channel: 'stable'
+        cache: true
+        cache-key: flutter-3.7.8 # optional, change this to force refresh cache
+        cache-path: ${{ runner.tool_cache }}/flutter # optional, change this to specify the cache path
+
+    - name: Cache android build folders
+      uses: actions/cache@v3
+      if: ${{ inputs.cacheAndroidBuild == 'true' }}
+      with:
+        path: |
+          build/**/**
+          !build/ios/**
+          !build/web/**
+        key: ${{ runner.os }}-android-build-${{ hashFiles('build/**/**') }}
+        restore-keys: |
+          ${{ runner.os }}-android-build-
+
+    - name: Cache ios build folder
+      uses: actions/cache@v3
+      if: ${{ inputs.cacheIosBuild == 'true' }}
+      with:
+        path: build/ios/**/**
+        key: ${{ runner.os }}-ios-build-${{ hashFiles('build/ios/**/**') }}
+        restore-keys: |
+          ${{ runner.os }}-ios-build-
+
+    - name: Cache web build folder
+      uses: actions/cache@v3
+      if: ${{ inputs.cacheWebBuild == 'true' }}
+      with:
+        path: build/web/**/**
+        key: ${{ runner.os }}-web-build-${{ hashFiles('build/web/**/**') }}
+        restore-keys: |
+          ${{ runner.os }}-web-build-
+
+    - name: Cache .dart_tool
+      uses: actions/cache@v3
+      with:
+        path: |
+          .dart_tool/**/**
+          !.dart_tool/flutter_build/**
+        key: ${{ runner.os }}-dart-tool-${{ hashFiles('.dart_tool/**/**') }}
+        restore-keys: |
+          ${{ runner.os }}-dart-tool-
+
+    - name: Cache pubspec dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ${{ env.FLUTTER_HOME }}/.pub-cache
+          **/.packages
+          **/.flutter-plugins
+          **/.flutter-plugin-dependencies
+        key: ${{ runner.os }}-build-pubspec-${{ hashFiles('**/pubspec.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-build-pubspec-
+
+    - name: Cache generated files
+      uses: actions/cache@v3
+      with:
+        path: |
+          lib/**/*.g.dart
+          test/**/*.mocks.dart
+        key: ${{ runner.os }}-gen-files-${{ hashFiles('**/*.g.art') }}
+        restore-keys: |
+          ${{ runner.os }}-gen-files-
+
+    - name: Flutter pub get
+      run: flutter pub get
+      shell: bash
+
+    - name: Generate missing dart code without deleting conflicting files
+      run: make gen-code
+      shell: bash

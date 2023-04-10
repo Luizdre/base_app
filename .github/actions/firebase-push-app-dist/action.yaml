@@ -1,0 +1,30 @@
+name: 'Push app to Firebase App Distribution'
+description: 'Pushes android or iOS app to firebase app distribution'
+
+inputs:
+  firebaseSaKey:
+    description: Firebase service account key
+    required: true
+  firebaseAppId:
+    description: Firebase Android/iOS app id
+    required: true
+  signedReleaseFile:
+    description: Signed release app file path
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install firebase tools
+      run: curl -sL https://firebase.tools | bash
+      shell: bash
+
+    - name: Decode Firebase SA Key and Push STG android app to Firebase App Distribution
+      id: push-firebase
+      env:
+        GOOGLE_APPLICATION_CREDENTIALS: firebase_sa_key.json
+        FIREBASE_APP_DIST_GROUPS: admin, desenvolvimento, operacao, produto
+      shell: bash
+      run: |
+        echo ${{ inputs.firebaseSaKey }} | base64 -d > $GOOGLE_APPLICATION_CREDENTIALS
+        firebase appdistribution:distribute ${{ inputs.signedReleaseFile }} --app ${{ inputs.firebaseAppId }} --groups "$FIREBASE_APP_DIST_GROUPS"

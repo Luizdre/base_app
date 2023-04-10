@@ -1,0 +1,45 @@
+name: 'Create a release on Github'
+description: 'Create a release on Github'
+inputs:
+  githubToken:
+    description: 'GITHUB_TOKEN secret for the workflow session'
+    required: true
+outputs:
+  releaseVersion:
+    description: "Release version based on pubspec"
+    value: ${{ steps.release-version.outputs.RELEASE_VERSION }}
+
+runs:
+  using: 'composite'
+  steps:
+      - name: Sets release variables
+        id: release-version
+        shell: bash
+        run: |
+          VERSION=`awk '/^version:/ {print $2}' pubspec.yaml`
+          IFS='+'
+          read -a split <<< "${VERSION}"
+
+          PUBSPEC_VERSION_NAME="${split[0]}"
+          PUBSPEC_BUILD_NUMBER="${split[1]}"
+          RELEASE_VERSION="${PUBSPEC_VERSION_NAME}-${PUBSPEC_BUILD_NUMBER}"
+
+          echo "::set-output name=RELEASE_VERSION::${RELEASE_VERSION}"
+          echo "RELEASE_VERSION=$RELEASE_VERSION"
+
+      - uses: release-drafter/release-drafter@v5
+        with:
+          version: ${{ steps.release-version.outputs.RELEASE_VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ inputs.githubToken }}
+
+      - name: Create release branch
+        env:
+          RELEASE_VERSION: ${{ steps.release-version.outputs.RELEASE_VERSION }}
+        shell: bash
+        run: |
+          BRANCH_NAME="release/$RELEASE_VERSION"
+
+          git checkout -b $BRANCH_NAME
+          git commit --allow-empty -am "Release $RELEASE_VERSION"
+          git push origin "$BRANCH_NAME"
